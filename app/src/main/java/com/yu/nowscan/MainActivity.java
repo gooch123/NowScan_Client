@@ -3,6 +3,7 @@ package com.yu.nowscan;
 import android.Manifest;
 import android.content.Intent;
 import android.content.pm.PackageManager;
+import android.graphics.Bitmap;
 import android.net.Uri;
 import android.os.Bundle;
 import android.util.Log;
@@ -23,11 +24,11 @@ import com.google.mlkit.vision.common.InputImage;
 import com.google.mlkit.vision.text.TextRecognition;
 import com.google.mlkit.vision.text.TextRecognizer;
 import com.google.mlkit.vision.text.latin.TextRecognizerOptions;
+import com.canhub.cropper.CropImageView;
 
 import org.json.JSONObject;
 
 import java.io.File;
-import java.io.IOException;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.util.Scanner;
@@ -40,6 +41,7 @@ public class MainActivity extends AppCompatActivity {
     private ImageCapture imageCapture;
     private ExecutorService cameraExecutor;
     private ProgressBar progressBar;
+    private CropImageView cropImageView;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -48,22 +50,43 @@ public class MainActivity extends AppCompatActivity {
 
         previewView = findViewById(R.id.previewView);
         progressBar = findViewById(R.id.progressBar);
+        cropImageView = findViewById(R.id.cropImageView);
         progressBar.setVisibility(View.GONE);
+        cropImageView.setVisibility(View.GONE);
         cameraExecutor = Executors.newSingleThreadExecutor();
 
-        startCamera();
-
         Button captureButton = findViewById(R.id.captureButton);
-        captureButton.setOnClickListener(v -> {
-            capturePhoto();
-            Log.d("CameraXApp", "Capture button clicked");
+        captureButton.setOnClickListener(v -> capturePhoto());
+
+        Button cropButton = findViewById(R.id.cropButton);
+        cropButton.setVisibility(View.GONE);
+        cropButton.setOnClickListener(v -> {
+            Bitmap croppedImage = cropImageView.getCroppedImage();
+            if (croppedImage != null) {
+                processCroppedImage(croppedImage);
+                cropImageView.setVisibility(View.GONE);
+                cropButton.setVisibility(View.GONE);
+                Button closeButton = findViewById(R.id.closeButton);
+                closeButton.setVisibility(View.GONE);
+            }
         });
+
+        Button closeButton = findViewById(R.id.closeButton);
+        if (closeButton != null) {
+            closeButton.setVisibility(View.GONE);
+            closeButton.setOnClickListener(v -> {
+                cropImageView.setVisibility(View.GONE);
+                cropButton.setVisibility(View.GONE);
+                closeButton.setVisibility(View.GONE);
+            });
+        }
 
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA)
                 != PackageManager.PERMISSION_GRANTED) {
             ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.CAMERA}, 101);
         }
 
+        startCamera();
     }
 
     private void startCamera() {
@@ -110,6 +133,7 @@ public class MainActivity extends AppCompatActivity {
         if (imageCapture == null) return;
 
         File photoFile = new File(getExternalFilesDir(null), "captured_image.jpg");
+        Uri photoUri = Uri.fromFile(photoFile);
 
         ImageCapture.OutputFileOptions options = new ImageCapture.OutputFileOptions.Builder(photoFile).build();
 
@@ -119,7 +143,14 @@ public class MainActivity extends AppCompatActivity {
                 new ImageCapture.OnImageSavedCallback() {
                     @Override
                     public void onImageSaved(@NonNull ImageCapture.OutputFileResults outputFileResults) {
-                        processImage(photoFile);
+                        cropImageView.setVisibility(View.VISIBLE);
+                        cropImageView.setImageUriAsync(photoUri);
+
+                        Button cropButton = findViewById(R.id.cropButton);
+                        cropButton.setVisibility(View.VISIBLE);
+
+                        Button closeButton = findViewById(R.id.closeButton);
+                        closeButton.setVisibility(View.VISIBLE);
                     }
 
                     @Override
@@ -130,10 +161,9 @@ public class MainActivity extends AppCompatActivity {
         );
     }
 
-    private void processImage(File photoFile) {
-        InputImage image;
+    private void processCroppedImage(Bitmap croppedImage) {
         try {
-            image = InputImage.fromFilePath(this, Uri.fromFile(photoFile));
+            InputImage image = InputImage.fromBitmap(croppedImage, 0);
 
             TextRecognizer recognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS);
 
@@ -143,11 +173,8 @@ public class MainActivity extends AppCompatActivity {
                         Log.d("MLKit", "Extracted Text: " + extractedText);
                         sendToServer(extractedText);
                     })
-                    .addOnFailureListener(e -> {
-                        e.printStackTrace();
-                    });
-
-        } catch (IOException e) {
+                    .addOnFailureListener(e -> e.printStackTrace());
+        } catch (Exception e) {
             e.printStackTrace();
         }
     }
@@ -176,7 +203,7 @@ public class MainActivity extends AppCompatActivity {
                     Log.d("ServerResponse", "Response: " + responseBody);
 
                     JSONObject jsonResponse = new JSONObject(responseBody);
-                    String data = jsonResponse.getString("body");
+                    String data = jsonResponse.optString("body", "");
 
                     Intent intent = new Intent(MainActivity.this, ResultActivity.class);
                     intent.putExtra("data", data);
