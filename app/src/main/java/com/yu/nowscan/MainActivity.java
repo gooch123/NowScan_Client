@@ -4,6 +4,7 @@ import android.Manifest;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
+import android.graphics.Color;
 import android.net.Uri;
 import android.os.Bundle;
 import android.util.Log;
@@ -60,6 +61,7 @@ public class MainActivity extends AppCompatActivity {
 
         Button cropButton = findViewById(R.id.cropButton);
         cropButton.setVisibility(View.GONE);
+        cropButton.setBackgroundColor(Color.CYAN);
         cropButton.setOnClickListener(v -> {
             Bitmap croppedImage = cropImageView.getCroppedImage();
             if (croppedImage != null) {
@@ -74,6 +76,7 @@ public class MainActivity extends AppCompatActivity {
         Button closeButton = findViewById(R.id.closeButton);
         if (closeButton != null) {
             closeButton.setVisibility(View.GONE);
+            closeButton.setBackgroundColor(Color.RED);
             closeButton.setOnClickListener(v -> {
                 cropImageView.setVisibility(View.GONE);
                 cropButton.setVisibility(View.GONE);
@@ -85,6 +88,12 @@ public class MainActivity extends AppCompatActivity {
                 != PackageManager.PERMISSION_GRANTED) {
             ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.CAMERA}, 101);
         }
+
+        Button menuButton = findViewById(R.id.menuButton);
+        menuButton.setOnClickListener(v -> {
+            Intent intent = new Intent(this, FileListActivity.class);
+            startActivity(intent);
+        });
 
         startCamera();
     }
